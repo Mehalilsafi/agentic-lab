@@ -1,7 +1,11 @@
-import os
 import json
+import os
+
 from dotenv import load_dotenv
 from openai import OpenAI
+from pydantic import ValidationError
+
+from models import Brief
 
 load_dotenv()
 
@@ -26,12 +30,26 @@ completion = client.chat.completions.create(
     messages=messages,
     temperature=1,
     max_completion_tokens=1500,
+    response_format={
+        "type": "json_schema",
+        "json_schema": {
+            "name": "brief",
+            "strict": True,
+            "schema": Brief.model_json_schema(),
+        },
+    },
 )
+print(json.dumps(Brief.model_json_schema(), indent=2))
 
 text = completion.choices[0].message.content
 print(repr(text))
 print(completion.choices[0].finish_reason)
 
-data = json.loads(text)
-print(data["summary"])
-print(data["key_points"])
+try:
+    brief = Brief.model_validate_json(text)
+    print(brief.summary)
+    for point in brief.key_points:
+        print("-", point)
+except ValidationError as e:
+    print("Output didn't match the Brief shape:")
+    print(e)
